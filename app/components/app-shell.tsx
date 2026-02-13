@@ -260,6 +260,23 @@ function sortFxRates(items: FxRate[]) {
   return [...items].sort((a, b) => a.currency.localeCompare(b.currency));
 }
 
+function parseHttpUrl(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function isLongNote(value: string) {
+  return value.length > 140 || value.split(/\r?\n/).length > 2;
+}
+
 function toNotificationsForm(settings: SettingsMap): NotificationsForm {
   return {
     ntfyUrl: settings[NTFY_URL_KEY] ?? settings.NTFY_URL ?? "",
@@ -345,6 +362,10 @@ function SubscriptionsTab({
   const [form, setForm] = useState<SubscriptionForm>(emptyForm);
   const [dateFieldValue, setDateFieldValue] = useState("");
   const [isDateManuallyEdited, setIsDateManuallyEdited] = useState(false);
+  const [expandedNotesById, setExpandedNotesById] = useState<
+    Record<string, boolean>
+  >({});
+  const [cancelUrlError, setCancelUrlError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -384,6 +405,7 @@ function SubscriptionsTab({
     setForm({ ...toFormState(), nextChargeDate: nextDate });
     setDateFieldValue(formatDate(nextDate));
     setIsDateManuallyEdited(false);
+    setCancelUrlError(null);
     setSaveError(null);
     setModalOpen(true);
   }
@@ -393,6 +415,7 @@ function SubscriptionsTab({
     setForm(toFormState(item));
     setDateFieldValue(formatDate(item.nextChargeDate));
     setIsDateManuallyEdited(true);
+    setCancelUrlError(null);
     setSaveError(null);
     setModalOpen(true);
     setOpenActionsFor(null);
@@ -404,6 +427,7 @@ function SubscriptionsTab({
     setForm(toFormState());
     setDateFieldValue("");
     setIsDateManuallyEdited(false);
+    setCancelUrlError(null);
     setSaveError(null);
   }
 
@@ -423,6 +447,14 @@ function SubscriptionsTab({
       return;
     }
 
+    const cancelUrl = form.cancelUrl.trim();
+    const parsedCancelUrl = cancelUrl ? parseHttpUrl(cancelUrl) : null;
+    if (cancelUrl && !parsedCancelUrl) {
+      setCancelUrlError("Cancel URL must be a valid http:// or https:// URL.");
+      return;
+    }
+    setCancelUrlError(null);
+
     const nextDate =
       form.nextChargeDate ||
       computeDefaultNextChargeDate(form.cadenceType, form.customMonths);
@@ -438,7 +470,7 @@ function SubscriptionsTab({
       remindLeadDays: null,
       archived: false,
       notes: form.notes.trim() ? form.notes.trim() : null,
-      cancelUrl: form.cancelUrl.trim() ? form.cancelUrl.trim() : null,
+      cancelUrl: parsedCancelUrl ? parsedCancelUrl.toString() : null,
     };
 
     setIsSaving(true);
@@ -551,6 +583,13 @@ function SubscriptionsTab({
                     ? originalAnnualized * fxRate
                     : null;
               const showOriginalSecondary = item.currency !== "EUR";
+              const noteText = item.notes?.trim() ?? "";
+              const hasNote = noteText.length > 0;
+              const noteExpanded = expandedNotesById[item.id] ?? false;
+              const noteNeedsToggle = hasNote && isLongNote(noteText);
+              const parsedCancelUrl = parseHttpUrl(item.cancelUrl);
+              const cancelDomain = parsedCancelUrl?.hostname.replace(/^www\./, "") ?? null;
+              const hasDetails = hasNote || Boolean(parsedCancelUrl);
 
               return (
                 <article key={item.id} className="ui-card rounded-2xl p-5 sm:p-6">
@@ -571,6 +610,61 @@ function SubscriptionsTab({
                           )}
                         </span>
                       </div>
+                      {hasDetails && (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5">
+                          <p className="text-[11px] uppercase tracking-wide ui-muted">
+                            Details
+                          </p>
+                          {hasNote && (
+                            <div className="mt-1.5">
+                              <p
+                                className="text-sm ui-muted"
+                                style={
+                                  noteExpanded
+                                    ? undefined
+                                    : {
+                                        display: "-webkit-box",
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: "vertical",
+                                        overflow: "hidden",
+                                      }
+                                }
+                              >
+                                {noteText}
+                              </p>
+                              {noteNeedsToggle && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedNotesById((prev) => ({
+                                      ...prev,
+                                      [item.id]: !noteExpanded,
+                                    }))
+                                  }
+                                  className="mt-1 text-xs text-[var(--ui-text-muted)] underline transition hover:text-[var(--ui-text)]"
+                                >
+                                  {noteExpanded ? "Show less" : "Show more"}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {parsedCancelUrl && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <a
+                                href={parsedCancelUrl.toString()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded-full border border-[var(--ui-border)] px-2.5 py-1 text-xs text-[var(--ui-text-muted)] transition hover:border-white/35 hover:text-[var(--ui-text)]"
+                              >
+                                Cancel <span aria-hidden="true">↗</span>
+                              </a>
+                              {cancelDomain && (
+                                <span className="text-xs ui-muted">{cancelDomain}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="relative z-30">
                       <button
@@ -600,6 +694,25 @@ function SubscriptionsTab({
                           >
                             Edit
                           </button>
+                          {parsedCancelUrl ? (
+                            <a
+                              href={parsedCancelUrl.toString()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => setOpenActionsFor(null)}
+                              className="rounded-lg px-2.5 py-1.5 text-xs text-[var(--ui-text-muted)] transition hover:bg-white/8 hover:text-[var(--ui-text)]"
+                            >
+                              Open cancel link
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              className="cursor-not-allowed rounded-lg px-2.5 py-1.5 text-xs text-[var(--ui-text-muted)] opacity-45"
+                            >
+                              Open cancel link
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => {
@@ -878,10 +991,25 @@ function SubscriptionsTab({
             <input
               type="url"
               value={form.cancelUrl}
-              onChange={(event) => setFormField("cancelUrl", event.target.value)}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setFormField("cancelUrl", nextValue);
+                if (!nextValue.trim()) {
+                  setCancelUrlError(null);
+                  return;
+                }
+                setCancelUrlError(
+                  parseHttpUrl(nextValue.trim())
+                    ? null
+                    : "Cancel URL must be a valid http:// or https:// URL.",
+                );
+              }}
               placeholder="https://..."
-              className="ui-input rounded-xl px-3 py-2.5 focus:border-white/30 focus:outline-none"
+              className={`ui-input rounded-xl px-3 py-2.5 focus:border-white/30 focus:outline-none ${
+                cancelUrlError ? "border-red-300/40" : ""
+              }`}
             />
+            {cancelUrlError && <p className="text-xs text-red-200">{cancelUrlError}</p>}
           </label>
           <label className="flex flex-col gap-2 text-sm text-[var(--ui-text-muted)] sm:col-span-2">
             Notes (optional)

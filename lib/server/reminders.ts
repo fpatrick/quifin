@@ -371,7 +371,7 @@ function buildChargeReminderBody(
 
   const cancelUrl = subscription.cancel_url?.trim();
   if (cancelUrl) {
-    lines.push("", cancelUrl);
+    lines.push("", `Cancel link: ${cancelUrl}`);
   }
 
   return lines.join("\n");
