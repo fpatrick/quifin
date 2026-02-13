@@ -7,7 +7,7 @@ let dbInstance: DatabaseSync | null = null;
 let migrationsApplied = false;
 
 const DEFAULT_DB_PATH = "./data/app.db";
-const DEFAULT_PROD_DB_PATH = "/data/quifin.db";
+const DEFAULT_PROD_DB_PATH = "/data/db/quifin.db";
 const MIGRATIONS_DIR = path.join(process.cwd(), "db", "migrations");
 
 function resolveDatabasePath() {

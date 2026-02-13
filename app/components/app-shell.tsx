@@ -10,6 +10,7 @@ import type {
   Subscription,
   SubscriptionWritePayload,
 } from "@/lib/types";
+import { QUIFIN_VERSION } from "@/lib/version";
 import { ModalSheet } from "./modal-sheet";
 import { Toggle } from "./toggle";
 
@@ -1617,7 +1618,7 @@ export function AppShell() {
               />
             </div>
             <p className="text-sm ui-muted sm:text-right">
-              quifin v1.0.0
+              {`quifin v${QUIFIN_VERSION}`}
             </p>
           </div>
 

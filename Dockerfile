@@ -20,23 +20,23 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
-ENV QUIFIN_DB_PATH=/data/quifin.db
+ENV QUIFIN_DB_PATH=/data/db/quifin.db
 
-RUN addgroup -S nodejs \
-  && adduser -S nextjs -G nodejs \
-  && mkdir -p /data \
-  && chown -R nextjs:nodejs /app /data
+RUN apk add --no-cache su-exec \
+  && mkdir -p /data/db
 
 # Standalone output keeps runtime image small.
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 
 # Migrations are loaded from /app/db at runtime.
-COPY --from=builder --chown=nextjs:nodejs /app/db ./db
+COPY --from=builder /app/db ./db
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-USER nextjs
 EXPOSE 3000
 VOLUME ["/data"]
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "server.js"]
