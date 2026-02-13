@@ -277,6 +277,12 @@ function isLongNote(value: string) {
   return value.length > 140 || value.split(/\r?\n/).length > 2;
 }
 
+function formatCancelUrlDisplay(url: URL) {
+  const host = url.hostname.replace(/^www\./, "");
+  const path = url.pathname === "/" ? "" : url.pathname;
+  return `${host}${path}`;
+}
+
 function toNotificationsForm(settings: SettingsMap): NotificationsForm {
   return {
     ntfyUrl: settings[NTFY_URL_KEY] ?? settings.NTFY_URL ?? "",
@@ -362,7 +368,7 @@ function SubscriptionsTab({
   const [form, setForm] = useState<SubscriptionForm>(emptyForm);
   const [dateFieldValue, setDateFieldValue] = useState("");
   const [isDateManuallyEdited, setIsDateManuallyEdited] = useState(false);
-  const [expandedNotesById, setExpandedNotesById] = useState<
+  const [expandedMetaById, setExpandedMetaById] = useState<
     Record<string, boolean>
   >({});
   const [cancelUrlError, setCancelUrlError] = useState<string | null>(null);
@@ -585,16 +591,22 @@ function SubscriptionsTab({
               const showOriginalSecondary = item.currency !== "EUR";
               const noteText = item.notes?.trim() ?? "";
               const hasNote = noteText.length > 0;
-              const noteExpanded = expandedNotesById[item.id] ?? false;
-              const noteNeedsToggle = hasNote && isLongNote(noteText);
+              const metaExpanded = expandedMetaById[item.id] ?? false;
               const parsedCancelUrl = parseHttpUrl(item.cancelUrl);
-              const cancelDomain = parsedCancelUrl?.hostname.replace(/^www\./, "") ?? null;
-              const hasDetails = hasNote || Boolean(parsedCancelUrl);
+              const cancelDisplay = parsedCancelUrl
+                ? formatCancelUrlDisplay(parsedCancelUrl)
+                : "";
+              const hasMeta = hasNote || Boolean(parsedCancelUrl);
+              const combinedMetaLength = cancelDisplay.length + noteText.length;
+              const metaNeedsToggle =
+                (hasNote && isLongNote(noteText)) ||
+                (parsedCancelUrl ? cancelDisplay.length > 44 : false) ||
+                combinedMetaLength > 120;
 
               return (
                 <article key={item.id} className="ui-card rounded-2xl p-5 sm:p-6">
                   <div className="flex items-start justify-between gap-4">
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="text-lg font-medium text-[var(--ui-text)]">
                         {item.name}
                       </h3>
@@ -610,58 +622,73 @@ function SubscriptionsTab({
                           )}
                         </span>
                       </div>
-                      {hasDetails && (
-                        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5">
-                          <p className="text-[11px] uppercase tracking-wide ui-muted">
-                            Details
-                          </p>
-                          {hasNote && (
-                            <div className="mt-1.5">
-                              <p
-                                className="text-sm ui-muted"
-                                style={
-                                  noteExpanded
-                                    ? undefined
-                                    : {
-                                        display: "-webkit-box",
-                                        WebkitLineClamp: 2,
-                                        WebkitBoxOrient: "vertical",
-                                        overflow: "hidden",
-                                      }
-                                }
-                              >
-                                {noteText}
-                              </p>
-                              {noteNeedsToggle && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setExpandedNotesById((prev) => ({
-                                      ...prev,
-                                      [item.id]: !noteExpanded,
-                                    }))
-                                  }
-                                  className="mt-1 text-xs text-[var(--ui-text-muted)] underline transition hover:text-[var(--ui-text)]"
-                                >
-                                  {noteExpanded ? "Show less" : "Show more"}
-                                </button>
-                              )}
-                            </div>
-                          )}
+                      {hasMeta && (
+                        <div className="mt-2.5 flex min-w-0 items-start gap-2">
                           {parsedCancelUrl && (
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <a
-                                href={parsedCancelUrl.toString()}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 rounded-full border border-[var(--ui-border)] px-2.5 py-1 text-xs text-[var(--ui-text-muted)] transition hover:border-white/35 hover:text-[var(--ui-text)]"
+                            <a
+                              href={parsedCancelUrl.toString()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--ui-border)] px-2 py-0.5 text-xs text-[var(--ui-text-muted)] transition hover:border-white/35 hover:text-[var(--ui-text)]"
+                            >
+                              Cancel <span aria-hidden="true">↗</span>
+                            </a>
+                          )}
+                          <div
+                            className={`min-w-0 flex-1 text-xs ui-muted ${
+                              metaExpanded
+                                ? "flex flex-wrap items-center gap-x-1.5 gap-y-1 whitespace-normal"
+                                : "flex items-center gap-1 overflow-hidden whitespace-nowrap"
+                            }`}
+                          >
+                            {parsedCancelUrl && (
+                              <span
+                                className={`min-w-0 ${
+                                  metaExpanded
+                                    ? "break-all whitespace-normal"
+                                    : "flex-1 truncate whitespace-nowrap"
+                                }`}
                               >
-                                Cancel <span aria-hidden="true">↗</span>
-                              </a>
-                              {cancelDomain && (
-                                <span className="text-xs ui-muted">{cancelDomain}</span>
-                              )}
-                            </div>
+                                {cancelDisplay}
+                              </span>
+                            )}
+                            {parsedCancelUrl && hasNote && (
+                              <span className="shrink-0 ui-muted">•</span>
+                            )}
+                            {hasNote && (
+                              <span
+                                className={`min-w-0 ${
+                                  metaExpanded
+                                    ? "inline whitespace-normal"
+                                    : "flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
+                                }`}
+                              >
+                                <span className="shrink-0 ui-muted">Note:</span>
+                                <span
+                                  className={`min-w-0 ${
+                                    metaExpanded
+                                      ? "break-words whitespace-normal"
+                                      : "truncate whitespace-nowrap"
+                                  }`}
+                                >
+                                  {noteText}
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                          {metaNeedsToggle && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedMetaById((prev) => ({
+                                  ...prev,
+                                  [item.id]: !metaExpanded,
+                                }))
+                              }
+                              className="shrink-0 text-xs text-[var(--ui-text-muted)] underline transition hover:text-[var(--ui-text)]"
+                            >
+                              {metaExpanded ? "Less" : "More"}
+                            </button>
                           )}
                         </div>
                       )}
@@ -694,25 +721,6 @@ function SubscriptionsTab({
                           >
                             Edit
                           </button>
-                          {parsedCancelUrl ? (
-                            <a
-                              href={parsedCancelUrl.toString()}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={() => setOpenActionsFor(null)}
-                              className="rounded-lg px-2.5 py-1.5 text-xs text-[var(--ui-text-muted)] transition hover:bg-white/8 hover:text-[var(--ui-text)]"
-                            >
-                              Open cancel link
-                            </a>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled
-                              className="cursor-not-allowed rounded-lg px-2.5 py-1.5 text-xs text-[var(--ui-text-muted)] opacity-45"
-                            >
-                              Open cancel link
-                            </button>
-                          )}
                           <button
                             type="button"
                             onClick={() => {
