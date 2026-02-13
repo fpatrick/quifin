@@ -3,6 +3,15 @@
 QuiFin is a local-first finance helper for households.  
 It helps you track subscription costs and split shared bills fairly.
 
+<p align="center">
+  <img
+    src="./public/quifin-dashboard.png"
+    alt="QuiFin dashboard screenshot"
+    width="100%"
+    style="max-width: 1100px; border-radius: 18px;"
+  />
+</p>
+
 ## Why This Exists
 
 Many people pay for subscriptions they forget.  
