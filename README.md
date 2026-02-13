@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# QuiFin
 
-## Getting Started
+QuiFin is a local-first finance helper for households.  
+It helps you track subscription costs and split shared bills fairly.
 
-First, run the development server:
+## Why This Exists
+
+Many people pay for subscriptions they forget.  
+Many couples also need a simple way to split shared bills without conflict.
+
+QuiFin focuses on clear monthly cost visibility, reminder support, manual FX conversion, and a partners fairness calculator.
+
+## Features
+
+- Subscription list with next charge date
+- Effective monthly and annualized cost in EUR
+- Manual FX rates (no auto-fetch)
+- Archive and restore subscriptions
+- Reminder workflow for upcoming charges (ntfy)
+- Partners calculator with proportional bill split
+- Local SQLite persistence
+
+## Tech Stack
+
+- Next.js (App Router)
+- TypeScript
+- SQLite
+- Podman / Quadlet
+- ntfy for notifications
+
+## Local Development
 
 ```bash
+cd app
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deployment (Podman + Quadlet)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Podman run
 
-## Learn More
+Use a host folder mounted to `/data` with `:Z,U`:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+podman run -d \
+  --name quifin \
+  -p 9173:3000 \
+  -v /var/opt/containers/quifin:/data:Z,U \
+  ghcr.io/fpatrick/quifin:latest
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Why `:U` matters:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Container runs as `uid=100`, `gid=101`.
+- `:U` makes bind mount ownership writable for that container user in rootless Podman.
+- Without `:U`, SQLite may fail with `unable to open database file`.
 
-## Deploy on Vercel
+### Quadlet example
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Use this as a starting point:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```ini
+[Container]
+ContainerName=quifin
+Image=ghcr.io/fpatrick/quifin:latest
+AutoUpdate=registry
+Volume=/var/opt/containers/quifin:/data:Z,U
+PublishPort=9173:3000
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=90
+
+[Install]
+WantedBy=default.target
+```
+
+## Environment Variables
+
+- `QUIFIN_DB_PATH` (optional): default `/data/db/quifin.db`
+- `DB_PATH` (optional alternative to `QUIFIN_DB_PATH`)
+- `PORT` (optional): default `3000`
+- `HOSTNAME` (optional): default `0.0.0.0`
+- `NTFY_URL` (optional)
+- `NTFY_TOPIC` (optional)
+- `NTFY_TOKEN` or `NTFY_BEARER_TOKEN` (optional)
+
+## Data Persistence and Privacy
+
+- SQLite is the source of truth.
+- Data is stored on the host through the mounted folder.
+- Default DB file path in container: `/data/db/quifin.db`.
+- With the example mount, host DB path is `/var/opt/containers/quifin/db/quifin.db`.
+- DB files and `.env` files are excluded from git and Docker build context.
+
+## Troubleshooting
+
+### unable to open database file
+
+1. Confirm the volume uses `:Z,U`.
+2. Confirm the host folder exists.
+3. Confirm container user can write to the mount.
+
+Check container user:
+
+```bash
+podman exec -it quifin id
+```
+
+Expected runtime user is `uid=100`, `gid=101`.
